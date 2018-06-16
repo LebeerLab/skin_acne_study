@@ -846,7 +846,7 @@ Fig1A
 
 This figure shows the percentage of skin microbiome samples that have lactobacilli in them from the three different studies.
 
-## Fig1B
+# Fig1B
 
 In Fig1B we will be looking at the relative abundances. For this graph we will be summing all Lactobacillus relative abundances per sample. We thus get one value per sample per body niche.  
 
