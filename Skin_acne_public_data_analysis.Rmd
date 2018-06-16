@@ -103,7 +103,7 @@ skin_t_lactos <- skin %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(skin_t_lactos, "Lactobacillus_skin_metagenomes.csv")
+write.csv(skin_t_lactos, "out/Lactobacillus_skin_metagenomes.csv")
 ```
 
 How many samples contain lactobacilli?
@@ -274,7 +274,7 @@ oralcavity_t_lactos <- oralcavity %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(oralcavity_t_lactos, "Lactobacillus_oralcavity_metagenomes.csv")
+write.csv(oralcavity_t_lactos, "out/Lactobacillus_oralcavity_metagenomes.csv")
 ```
 
 
@@ -373,7 +373,7 @@ nasalcavity_t_lactos <- nasalcavity %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(nasalcavity_t_lactos, "Lactobacillus_nasalcavity_metagenomes.csv")
+write.csv(nasalcavity_t_lactos, "out/Lactobacillus_nasalcavity_metagenomes.csv")
 ```
 
 Top 12 plot
@@ -464,7 +464,7 @@ milk_t_lactos <- milk %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(milk_t_lactos, "Lactobacillus_milk_metagenomes.csv")
+write.csv(milk_t_lactos, "out/Lactobacillus_milk_metagenomes.csv")
 ```
 
 Nope, the dataset is completely empty...
@@ -519,7 +519,7 @@ vagina_t_lactos <- vagina %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(vagina_t_lactos, "Lactobacillus_vagina_metagenomes.csv")
+write.csv(vagina_t_lactos, "out/Lactobacillus_vagina_metagenomes.csv")
 ```
 
 Top12 species plot:
@@ -623,7 +623,7 @@ stool_t_lactos <- stool %>%
   filter(Abundance > 0) %>%
   replace_na(list(disease = "Unkown"))
 
-write.csv(stool_t_lactos, "Lactobacillus_stool_metagenomes.csv")
+write.csv(stool_t_lactos, "out/Lactobacillus_stool_metagenomes.csv")
 ```
 
 Top 12 species
@@ -1324,11 +1324,19 @@ ggarrange(ggarrange(Fig1A,
           heights = c(1,2,1),
           nrow = 3)
 
-ggsave(filename = "Figure1.tiff",
+# Low quality
+ggsave(filename = "Figure1.png",
        width = 178,
        height = 210,
        units = "mm",
        dpi = 300)
+
+# Print quality
+# ggsave(filename = "Figure1.tiff",
+#        width = 178,
+#        height = 210,
+#        units = "mm",
+#        dpi = 300)
 ```
 
 
