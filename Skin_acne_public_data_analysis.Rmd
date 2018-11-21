@@ -1,7 +1,7 @@
 ---
 title: "Analysis of public skin metagenome data"
 author: "Sander Wuyts"
-date: "July 15, 2018"
+date: "November 20, 2018"
 output: 
   html_document:
     toc: true
@@ -10,8 +10,9 @@ output:
 
 # Introduction
 
-In this study we will be using publicly available datasets such as in the curatedMetagenomicsData package (shotgun metagenomics) and the MicrobeDS package (for 16S rRNA gene data) to explore the presence of Lactobacilli on the skin. We will also use this data to compare with the other niches available in these datasets. In addition we will also import or own 16S rRNA gene dataset.
+In this study we will be using publicly available datasets such as in the curatedMetagenomicData package (shotgun metagenomics) and the MicrobeDS package (for 16S rRNA gene data) to explore the presence of Lactobacilli on the skin. We will also use this data to compare with the other niches available in these datasets. In addition we will also import or own 16S rRNA gene dataset.
 
+Let's load all necessary packages:
 
 ```{r}
 suppressMessages(library(curatedMetagenomicData))
@@ -31,7 +32,7 @@ packageVersion("scales")
 
 # Total number of samples in all projects
 
-Let's see how many datasets of the curatedMetagenomicsProject have skin data
+Let's see how many datasets of the curatedMetagenomicData have skin datasets
 
 ```{r}
 n_samples <- combined_metadata %>%
@@ -61,8 +62,10 @@ curatedMetagenomicData("*metaphlan_bugs*.skin", dryrun = T)
  
 These are three different datesets from three different studies:
 
+* HMP 2012: https://www.ncbi.nlm.nih.gov/pubmed/?term=22699609
 * Chng et al 2016: https://www.ncbi.nlm.nih.gov/pubmed/27562258
 * Oh et al 2014: https://www.ncbi.nlm.nih.gov/pubmed/25279917
+* Olm et al 2017: https://www.ncbi.nlm.nih.gov/pubmed/?term=28073918
 * Tett et al 2016: https://www.ncbi.nlm.nih.gov/pubmed/28649415 
 
 Let's download these:
@@ -208,7 +211,7 @@ stat_metagenome <- skin %>%
                                                  unique()) ~ "non_lacto")) %>%
   group_by(total_lactos) %>%
   summarise(count = n()/nrow(.)) %>%
-  mutate(study = "curatedMetagenomics")
+  mutate(study = "curatedMetagenomicData")
 
 stat_metagenome
 ```
@@ -239,26 +242,12 @@ And again, merge these
 
 ```{r}
 mergedatasets <- mergeData(datasets)
-
 mergedatasets
 ```
 
-*Important notice*: There's a small error in the package. Some of the samples have an extremely high abundance in Lactobacillus species (up to 90%) which was suspicous to us. After contacting the authors, they confirmed me that some metadata was mixed up and that these samples were actually vaginal or nasal samples instead of oral samples. They suggested the following manual fix but promised to push a fix in the future.
 
 ```{r}
 oralcavity <- ExpressionSet2phyloseq(mergedatasets)
-
-# Need to be added to the other body sites later
-extra_vaginal_samples <- subset_samples(oralcavity, body_subsite == "posterior_fornix")
-extra_vaginal_samples <- psmelt(extra_vaginal_samples) %>%
-  mutate(body_site = "vagina")
-extra_nasal_samples <- subset_samples(oralcavity, body_subsite == "anterior_nares")
-extra_nasal_samples <- psmelt(extra_nasal_samples) %>%
-  mutate(body_site = "nasalcavity")
-
-# Exclude them from oral body site
-oralcavity <- subset_samples(oralcavity, body_subsite != "anterior_nares")
-oralcavity <- subset_samples(oralcavity, body_subsite != "posterior_fornix")
 oralcavity <- psmelt(oralcavity)
 ```
 
@@ -320,7 +309,6 @@ oralcavity_t_lactos %>%
   ggtitle("Relative Abundance of Lactobacilli in oralcavity")
 ```
 
-Very low abundance
 
 # Nasal
 
@@ -352,12 +340,11 @@ mergedatasets <- mergeData(datasets)
 mergedatasets
 ```
 
-And finally convert to phyloseq. *Important remark*: We'll be adding the samples we removed from the oral dataset here to the nasal!
+And finally convert to phyloseq.
 
 ```{r warning=FALSE}
 nasalcavity <- ExpressionSet2phyloseq(mergedatasets)
-nasalcavity <- psmelt(nasalcavity) %>%
-  bind_rows(extra_nasal_samples)
+nasalcavity <- psmelt(nasalcavity)
 ```
 
 ## Analysis
@@ -498,12 +485,11 @@ mergedatasets <- mergeData(datasets)
 mergedatasets
 ```
 
-Let's convert to phyloseq. *Important note*: we will be adding the samples that were wrongly annotated as belonging to the oral cavity here!
+Let's convert to phyloseq.
 
 ```{r warning=FALSE}
 vagina <- ExpressionSet2phyloseq(mergedatasets)
-vagina <- psmelt(vagina) %>%
-  bind_rows(extra_vaginal_samples)
+vagina <- psmelt(vagina) 
 ```
 
 ## Analysis
@@ -811,7 +797,7 @@ Fig1A <- stat_16S %>%
                             total_lactos == "percentage_lacto" ~ "Lactobacilli detected")) %>%
   mutate(total_lactos = factor(total_lactos, levels = c("No Lactobacilli detected",
                                                            "Lactobacilli detected"))) %>%
-  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomics"))) %>%
+  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomicData"))) %>%
   mutate(count = count*100) %>%
   ggplot(aes(x = study, y = count, fill = total_lactos)) +
   geom_bar(stat = "identity") +
@@ -866,10 +852,10 @@ HMP_plot <- HMPv35_lactos %>%
   filter(summedAbundance > 0)
 ```
 
-Now also for the above described datasets from the curatedMetagenomics package, except for the nasal cavity as not a lot of lacto samples were detected there.
+Now also for the above described datasets from the curatedMetagenomicData package, except for the nasal cavity as not a lot of lacto samples were detected there.
 
 ```{r}
-curatedMetagenomics <- oralcavity_t_lactos %>%
+curatedMetagenomicData <- oralcavity_t_lactos %>%
 #  bind_rows(nasalcavity_t_lactos)  %>% # Nasal cavity is filtered out because only 3 samples contain lactos
   bind_rows(skin_t_lactos) %>%
   bind_rows(stool_t_lactos) %>%
@@ -880,7 +866,7 @@ curatedMetagenomics <- oralcavity_t_lactos %>%
   summarise(summedAbundance = sum(Abundance)) %>%
   ungroup() %>%
   add_count(body_site) %>%
-  mutate(study = "curatedMetagenomics") %>%
+  mutate(study = "curatedMetagenomicData") %>%
   mutate(body_site = case_when(body_site == "stool" ~ "Stool",
                                body_site == "skin" ~ "Skin",
                                body_site == "vagina" ~ "Vaginal",
@@ -903,20 +889,20 @@ b_16S <- partial_16S %>%
 Before we start constructing our Fig 1B we also need to do some counting for the labels. Then we'll go on with constructing Figure 1B
 
 ```{R}
-fig1B_count <- curatedMetagenomics %>%
+fig1B_count <- curatedMetagenomicData %>%
   bind_rows(HMP_plot) %>%
   bind_rows(b_16S) %>%
   select(body_site, n, study) %>%
   distinct() %>%
-  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomics")))
+  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomicData")))
  
 
 label_format <- format_format(big.mark = " ", decimal.mark = ".", scientific = FALSE)
 
-Fig1B <- curatedMetagenomics %>%
+Fig1B <- curatedMetagenomicData %>%
   bind_rows(HMP_plot) %>%
   bind_rows(b_16S) %>%
-  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomics"))) %>%
+  mutate(study = factor(study, levels = c("This study", "HMPv35", "curatedMetagenomicData"))) %>%
   mutate(body_site = factor(body_site, levels = c("Skin", "Oral", "Stool", "Vaginal"))) %>%
   ggplot(aes(x = body_site, y = summedAbundance, fill = study)) +
   geom_boxplot(outlier.alpha = 0, alpha = 0.4) +
@@ -959,7 +945,7 @@ We need some information from 1E to colour figure 1C. Therefore we will be plott
 In this figure we will be counting the top 12 Lactobacillus species from the shotgun metagenomic dataset. 
 
 ```{r}
-curatedMetagenomics_top12_species <- skin_t_lactos %>%
+curatedMetagenomicData_top12_species <- skin_t_lactos %>%
   group_by(Species) %>%
   summarise(count = n()) %>%
   separate(Species, into = c('genus', 'species'), sep ="_", extra = "merge") %>% 
@@ -995,11 +981,11 @@ species_to_phylogenetic_group <- tibble(Species = c("Lactobacillus crispatus",
 
 
 # Add this data to the dataset
-curatedMetagenomics_top12_species <- curatedMetagenomics_top12_species %>%
+curatedMetagenomicData_top12_species <- curatedMetagenomicData_top12_species %>%
   left_join(species_to_phylogenetic_group) 
 
 
-Fig1E <- curatedMetagenomics_top12_species %>%
+Fig1E <- curatedMetagenomicData_top12_species %>%
   ggplot(aes(x = reorder(Species, count), y = count, fill = clade_name)) +
   geom_col() +
   coord_flip() +
@@ -1057,30 +1043,39 @@ partial_16S %>%
 Now time for the phylogenetic placement! This is probably the hardest part to understand from this whole analysis as we need to do a lot of parsing. But basically we will be reading in a jplace object (which contains oru phylogenetic placements and our 16S rRNA tree) and convert this to a large dataframe which we called tidytree. This makes data handling and mutating much easier. We then manipulate this object to figure out to be able to annotate clades and colour the branches that have a sequenced placed on them.
 
 ```{r}
-# functions by s. wittouck to convert a jplace object to a tidytree object
+# Original function by S. Wittouck and adapted by S. Wuyts.
 jplace2tidytrees <- function(jplace, outgroup_tips) {
   
+  # Get the edgeNumber of each node and store them under edge.length
   jplace@phylo$edge.length <- tibble(node = jplace@phylo$edge[, 2]) %>%
     left_join(attr(jplace@phylo, "edgeNum")) %>%
     pull(edgeNum)
   
+  # Identify the MRCA of the outgroup
   outgroup_node <- MRCA(jplace@phylo, tip = outgroup_tips)
   
+  # Reroot the tree baced on this MRCA
   jplace@phylo <- reroot(jplace@phylo, outgroup_node)
   
+  # Initiate new nodes table
   nodes <- tibble()
   
-  for (taxon_index in 1:length(jplace@placements$n)) {
+  for (taxon_index in 1:length(jplace@placements$name)) {
     
-    taxon_name <- jplace@placements$n[[taxon_index]]
+    # Get taxon name of placement
+    taxon_name <- jplace@placements$name[[taxon_index]]
     
-    nodes_new <- as.data.frame(jplace@phylo, branch.length = "none") %>%
-      rename(edge_num = length)
+    # Get ggtree table
+    nodes_new <- ggtree(jplace@phylo, branch.length = "none") %>%
+      .$data %>%
+      rename(edge_num = branch.length) # Retrieve the edgeNumber that we stored in the branched length above
     
-    placements <- jplace@placements$p[[taxon_index]] %>%
-      as_tibble() %>%
-      set_names(jplace@fields)
-    
+    # Get the placements in a table
+    placements <- jplace@placements %>%
+      as_tibble %>%
+      filter(name == taxon_name) %>%
+      select(-node)
+
     nodes_new <- left_join(nodes_new, placements) %>%
       mutate(placement = ifelse(is.na(like_weight_ratio), "no", "yes")) %>%
       mutate(asv = !! taxon_name)
@@ -1168,7 +1163,7 @@ colors <- clades$col %>%
   c(., "L. reuteri group" = "#E31A1C")
 
 # This is necessary for colouring the tips according to the curateddMetagenomics dataset
-curatedMetagenomics_top12_species <- curatedMetagenomics_top12_species %>%
+curatedMetagenomicData_top12_species <- curatedMetagenomicData_top12_species %>%
   mutate(Species = if_else(Species == "Lactobacillus casei_paracasei", "Lactobacillus casei", Species)) %>%
   rename(tipcolor = clade_name) %>%
   rename(species = Species)
@@ -1177,7 +1172,7 @@ curatedMetagenomics_top12_species <- curatedMetagenomics_top12_species %>%
 # Plot Fig 1C
 Fig1C <- tidytree  %>%
   left_join(nodes_clades) %>%
-  left_join(curatedMetagenomics_top12_species) %>%
+  left_join(curatedMetagenomicData_top12_species) %>%
   mutate(clade_name = ifelse(is.na(clade_name), "unclassified", clade_name)) %>%
   mutate(tipcolor = ifelse(is.na(tipcolor), "unclassified", tipcolor)) %>%
   mutate(color = ifelse(placement == "yes", clade_name, "other")) %>%
@@ -1205,6 +1200,7 @@ Fig1C <- tidytree  %>%
 
 Fig1C
 ```
+
 # Fig 1 D
 
 And then as a final figure we'll be constructing 1D which shows how many times a sequence was placed in a certain clade.
@@ -1290,7 +1286,7 @@ Fig1E <- Fig1E +
                                expression(paste(italic("L. reuteri")," group")),
                                expression(paste(italic("L. sakei")," group"))
                                )) +
-  ggtitle("CuratedMetagenomics") +
+  ggtitle("curatedMetagenomicData") +
   theme(legend.text.align = 0,
         legend.text = element_text(size = 6),
         legend.key.size = unit(6, "pt"))
