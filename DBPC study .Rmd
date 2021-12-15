@@ -1,0 +1,943 @@
+---
+title: "Acne Brazilian samples"
+author: "Lize Delanghe"
+date: "3/26/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preparation
+
+Start by loading the necessary R package (check latest versions: tidyverse 1.3.0, tidyamplicons 0.2.1) and data
+
+```{r}
+install.packages("tibble")
+packageVersion("tibble")
+install.packages("tidyverse")
+library(tidyverse)
+install.packages("devtools")
+devtools::install_github("SWittouck/tidyamplicons", ref = "v0.2.1")
+library(tidyamplicons)
+install.packages("ggpubr")
+install.packages("rlang")
+install.packages("tidyselect")
+library(ggpubr)
+library(Hmisc)
+library(glue)
+install.packages("dplyr")
+library(dplyr)
+install.packages("dada2")
+library(dada2)
+```
+
+## Implement reclassificition function for lactobacilli
+
+!/usr/bin/env Rscript
+
+dependencies: tidyverse v1.3.0, tidyamplicons v0.2.1, dada2 v1.1.4.0
+
+install dada2:
+```{r}
+install.packages("devtools") 
+library(devtools)
+devtools::install_github("benjjneb/dada2", ref="v1.14")
+pkgbuild::check_build_tools(debug = TRUE)
+
+```
+
+load reclassification function:
+```{r}
+source("../reclassify_lactos/src/reclassification_function.R")
+```
+
+load refdb location and test dataset:
+```{r}
+fin_refdb <- "../reclassify_lactos/data/bac120_ssu_r89_dada2_lactobacillaceae_noprefix.fna"
+load(file = "../data/acneBrazil.rda")
+```
+
+merge family Leuconostocaceae into Lactobacillaceae:
+```{r}
+run$taxa <-
+run$taxa %>%
+  {.$family[.$family == "Leuconostocaceae"] <- "Lactobacillaceae"; .}
+```
+
+reclassify ASVs of Lactobacillaceae using reference database:
+```{r}
+run <- run %>% reclassify_family("Lactobacillaceae", fin_refdb, sequence_var = "taxon")
+```
+
+check result:
+```{r}
+run %>%
+  add_rel_abundance() %>%
+  filter_taxa(family == "Lactobacillaceae") %>%
+  aggregate_taxa(rank = "genus") %>%
+  bar_plot() +
+theme(axis.text.x = element_blank())
+
+```
+
+#!/usr/bin/env Rscript
+
+# dependencies: tidyverse v1.3.0, tidyamplicons v0.2.1, dada2 v1.1.4.0
+```{r}
+library(tidyverse)
+library(tidyamplicons)
+library(dada2)
+```
+
+# load reclassification function:
+```{r}
+source("reclassification_function.R")
+```
+
+# load refdb location and test dataset:
+```{r}
+fin_refdb <- "../data/bac120_ssu_r89_dada2_oldlactobacillus_noprefix.fna"
+load(file = "../data/acneBrazil.rda")
+```
+
+# merge family Leuconostocaceae into Lactobacillaceae:
+```{r}
+
+run$taxa <-
+  run$taxa %>%
+  {.$family[.$family == "Leuconostocaceae"] <- "Lactobacillaceae"; .}
+```
+
+# reclassify ASVs of Lactobacillaceae using reference database:
+```{r}
+run <- run %>% reclassify_genus("Lactobacillus", fin_refdb, sequence_var = "taxon")
+```
+
+
+# check result:
+```{r}
+run %>%
+  add_rel_abundance() %>%
+  filter_taxa(family == "Lactobacillaceae") %>%
+  aggregate_taxa(rank = "genus") %>%
+  bar_plot() +
+  theme(axis.text.x = element_blank())
+```
+
+
+  
+## Exploration of the data
+
+```{r}
+run <- add_taxon_name_color(run)
+bar_plot(run)
+```
+
+Inspect the data:
+```{r}
+glimpse(run$samples)
+glimpse(run$taxa)
+glimpse(run$abundances)
+glimpse(run$lib_sizes)
+sum(run$lib_sizes$lib_size)
+report_numbers(run)
+```
+
+Import the sample metadata (store in object samples) + filter out samples type C (Cyrelle):
+
+```{r}
+samples <- readxl::read_excel(path = "../data/metadata.xlsx")
+run <- add_sample_tibble(run, samples) %>%
+  mutate_samples(week=factor(week, levels=c("0","2","4","8","12","NA")))
+glimpse(run$samples)
+```
+
+## Taxonomy
+Filter data: 
+
+```{r}
+runacne <- 
+  run %>%
+  filter_samples(type != "C")
+
+verumdata <- 
+  runacne %>%
+  filter_samples(treatment == "verum")
+
+placebodata <- 
+  runacne %>%
+  filter_samples(treatment == "placebo")
+```
+
+
+Barplots at ASV level: 
+
+```{r}
+runacne %>%
+  filter_samples(type != "NC") %>%
+  add_taxon_name() %>%
+  add_taxon_name_color() %>%
+  update_taxon_name_color(
+    add = "Lacticaseibacillus 1", remove = "Gemella 1"
+  ) %>%
+   update_taxon_name_color(
+  add = "Propionibacterium 1", remove = "FM873692_g 2"
+  ) %>%
+  bar_plot(x=week) + 
+  facet_wrap(~treatment,scales = "free_x")
+
+
+      
+bar_plot(runacne) +
+  facet_wrap(~treatment, scales = "free_x")
+bar_plot(runacne) +
+  facet_wrap(~week, scale = "free_x")
+
+bar_plot(verumdata) +
+  facet_wrap(~week, scale = "free_x")
+ggsave(
+  "../results/barplots_verum.png", width = 35, height = 15, units = "cm"
+)
+bar_plot(placebodata) +
+  facet_wrap(~week, scale = "free_x")
+ggsave(
+  "../results/barplots_placebo.png", width = 35, height = 15, units = "cm"
+)
+
+```
+
+
+Barplots at genus level: 
+```{r}
+runacne_genus <- runacne %>% aggregate_taxa(rank = "genus") 
+
+
+runacne_genus %>%
+  filter_samples(type != "NC") %>%
+  add_taxon_name() %>%
+  add_taxon_name_color() %>%
+ update_taxon_name_color(
+    add = "Lacticaseibacillus", remove = "Acinetobacter"
+  ) %>%
+   update_taxon_name_color(
+    add = "Propionibacterium 1", remove = "	FM873692_g 2"
+  ) %>%
+  bar_plot(x=week) + 
+  facet_grid(cols = vars(treatment), scales = "free_x", space = "free_x")
+ggsave(
+  "../results/barplots_genuslevel_summaryxweek_paperlayout.png", width = 35, height = 15, units = "cm"
+)
+      
+verumdata %>%  
+  aggregate_taxa(rank = "genus") %>%
+  bar_plot() +
+    facet_wrap(~week, scale = "free_x")+
+  labs(title="Verum group",x="Participants",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "bottom",axis.text.x= element_blank(),axis.ticks.x=element_blank(),axis.text.y= element_text(size = 10), axis.title=element_text(size=12))+
+ggsave(
+  "../results/barplots_verum_paperlayout.png", width = 35, height = 15, units = "cm"
+)
+
+placebodata %>%  
+  aggregate_taxa(rank = "genus") %>%
+  bar_plot() +
+  facet_wrap(~week, scale = "free_x")+
+  labs(title="Placebo group",x="Participants",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "bottom",axis.text.x= element_blank(),axis.ticks.x=element_blank(),axis.text.y= element_text(size = 10), axis.title=element_text(size=12))
+ggsave(
+  "../results/barplots_placebo_paperlayout.png", width = 35, height = 15, units = "cm"
+)
+
+
+
+```
+
+
+## Quality control
+
+Inspection of library size:
+
+```{r}
+run %>%
+  add_lib_size() %>%
+  samples() %>%
+  ggplot(aes(fct_reorder(sample, lib_size, .desc = T), lib_size)) +
+  geom_col()
+```
+
+Scatter plots library sizes acne samples:
+
+```{r}
+verumdata %>%
+  add_lib_size() %>%
+  samples() %>%
+  ggplot(aes(sample, lib_size)) +
+  geom_point()
+ggsave(
+  "../results/lib_size_scatterplot_verum.png", width = 25, height = 15, units = "cm"
+)
+```
+```{r}
+placebodata %>%
+  add_lib_size() %>%
+  samples() %>%
+  ggplot(aes(sample, lib_size)) +
+  geom_point()
+ggsave(
+  "../results/lib_size_scatterplot_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+```{r}
+run %>%
+  add_lib_size() %>%
+  filter_samples(type == "NC") %>%
+   samples() %>%
+  ggplot(aes(sample, lib_size)) +
+  geom_point()
+ggsave(
+  "../results/lib_size_scatterplot_NC.png", width = 25, height = 15, units = "cm"
+)
+```
+
+```{r}
+runacne %>%
+  add_lib_size() %>%
+  samples() %>%
+  ggplot(aes(sample, lib_size)) +
+  geom_point() +
+  facet_wrap(~treatment,scales = "free_x")
+ggsave(
+  "../results/lib_size_scatterplot_facetwraptreatment.png", width = 25, height = 15, units = "cm"
+)
+```
+
+
+Inspect mitochondrial and chloroplast reads:
+
+```{r}
+runacne %>%
+  aggregate_taxa(rank = "family") %>%
+  bar_plot()
+```
+
+Inspect the negative controls:
+
+```{r}
+runacne %>%
+  filter_samples(type == "NC") %>%
+  sample_plot()
+ggsave(
+  "../results/negative_controls.png", width = 25, height = 15, units = "cm"
+)
+```
+
+Filter out mitochondria and chloroplasts: 
+
+```{r}
+runacne <-
+  runacne %>%
+  filter_taxa(
+    (class != "Chloroplast" | is.na(class)) & 
+      (family != "Mitochondria" | is.na(family))
+  )
+runacne %>%
+  aggregate_taxa(rank = "family") %>%
+  bar_plot()
+```
+
+Filter the samples (based on amount of reads compared to NC):
+
+```{r}
+runacne %>%
+  add_lib_size() %>%
+  samples() %>%
+  ggplot(aes(x = type, y = lib_size)) +
+  geom_jitter() +
+  scale_y_log10()
+
+runacne <-
+  runacne %>%
+  add_lib_size() %>%
+  filter_samples(lib_size >= 5000)
+```
+
+
+```
+
+
+## alpha diversity 
+
+add_alphas() function:
+
+```{r}
+runacne %>%
+  add_alphas() %>%
+  samples() %>%
+  glimpse()
+```
+
+Filter NC out of acne data:
+
+```{r}
+runacne_filtered <- 
+  runacne %>%
+  filter_samples(type != "NC")
+```
+
+Let's visualize the observed number of taxa (alpha diversity): 
+
+```{r}
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_boxplot(aes(group = week, factor(week, levels=c("0","2","4","8","12")))) + 
+  facet_wrap(~treatment) +
+  geom_point() 
+ggsave(
+  "../results/alphadiversity_inverse_simpson.png", width = 25, height = 15, units = "cm"
+)
+  #geom_line(aes(group = ID_participant))
+
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  ggplot(aes(x = week, y = observed)) +
+  geom_boxplot(aes(group = week, factor(week, levels=c("0","2","4","8","12")))) + 
+  facet_wrap(~treatment) +
+  geom_point() 
+ggsave(
+  "../results/alphadiversity_observed_diversity.png", width = 25, height = 15, units = "cm"
+)
+  #geom_line(aes(group = ID_participant))
+
+```
+
+Alpha diversities paper layout
+```{r}
+#alpha diversity at baseline for placebo and verum
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(week == 0) %>%
+  ggplot(aes(x = treatment, y = observed)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  stat_compare_means()+
+  labs(x="Treatment group", y="Alpha diversity measure", title="Observed diversity")+
+    theme_pubclean()
+ggsave(
+  "../results/alphadiversity_week0_observeddiversity_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(week == 0) %>%
+  ggplot(aes(x = treatment, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  stat_compare_means()+
+  labs(x="Treatment group", y="Alpha diversity measure", title="Inverse Simpson index")+
+    theme_pubclean()
+ggsave(
+  "../results/alphadiversity_week0_inversesimpson_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+
+my_comparisons <- list(c("0","2"), c("2","4"), c("4","8"), c("8","12"), c("0","12"))
+#inverse simpson for placebo
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "placebo") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.5, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  #stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Alpha diversity measure", title="Inverse Simpson index placebo group")+
+    theme_pubclean()+
+    theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title = element_text(size=16) )
+ggsave(
+  "../results/alphadiversity_placebo_inversesimpson_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+#inverse simpson for verum
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "verum") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.5, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  #stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Alpha diversity measure", title="Inverse Simpson index verum group")+
+    theme_pubclean()+
+    theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title = element_text(size=16) )
+ggsave(
+  "../results/alphadiversity_verum_inversesimpson_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+#observed diversity for placebo
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "placebo") %>%
+  ggplot(aes(x = week, y = observed)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.5, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+ # stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Alpha diversity measure", title="Observed diversity placebo group")+
+    theme_pubclean()+
+    theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title = element_text(size=16) )
+ggsave(
+  "../results/alphadiversity_placebo_observeddiversity_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+#observed diversity for verum
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "verum") %>%
+  ggplot(aes(x = week, y = observed)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.5, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  #stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Alpha diversity measure", title="Observed diversity verum group")+
+    theme_pubclean()+
+    theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title = element_text(size=16) )
+ggsave(
+  "../results/alphadiversity_verum_observeddiversity_paperlayout.png", width = 25, height = 15, units = "cm"
+)
+
+```
+#Alpha diversity figures presentation Tom
+
+```{r}
+#inverse simpson for placebo
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "placebo") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Inverse Simpson index")+
+    theme_pubclean()
+
+
+#inverse simpson for verum
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "verum") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Week", y="Inverse Simpson index")+
+    theme_pubclean()
+
+#inverse simpson for placebo
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "placebo") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  labs(x="Week", y="Inverse Simpson index")+
+    theme_pubclean()
+
+
+#inverse simpson for verum
+runacne_filtered %>%
+  add_alphas() %>%
+  samples() %>%
+  filter(treatment == "verum") %>%
+  ggplot(aes(x = week, y = inverse_simpson)) +
+  geom_jitter(width=0.1, height=0, size=2, alpha=0.7, aes()) + 
+  stat_summary(fun.y=mean, geom="errorbar", aes(ymax = ..y.., ymin = ..y..), width = .76, linetype = "dashed")+
+  labs(x="Week", y="Inverse Simpson index")+
+    theme_pubclean()
+
+```
+
+
+## Beta diversity 
+
+Let's inspect a PCoA plot:
+
+```{r}
+runacne_filtered %>%
+  add_pcoa() %>%
+  samples() %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, col = week)) +
+  facet_wrap(~treatment) +
+  geom_point() +
+  theme_pubclean()+
+  labs(color='week')+
+  theme(axis.text=element_text(size=12),axis.title=element_text(size=14),legend.title=element_text(size=14), legend.text=element_text(size=12))
+  #geom_text(aes(label = ID_participant), hjust = 0, vjust = 0)
+ggsave(
+  "../results/pcoa_weeks.png", width = 25, height = 15, units = "cm"
+)
+```
+```{r}
+runacne_filtered <- add_pcoa(runacne_filtered)
+runacne_filtered %>%
+
+  samples() %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, col = treatment)) +
+  geom_point()+
+   xlab(paste("pcoa1",round(runacne_filtered$pcoa_variances[2]*100,digits=1), "%",sep = " "))+
+  ylab(paste("pcoa2",round(runacne_filtered$pcoa_variances[1]*100,digits=1), "%",sep = " "))+
+  theme_pubclean()+
+  labs(color='treatment group')+
+  theme(axis.text=element_text(size=12),axis.title=element_text(size=14),legend.title=element_text(size=14), legend.text=element_text(size=12))
+ggsave(
+  "../results/pcoa_treatment.png", width = 25, height = 15, units = "cm"
+)
+```
+
+
+Let's compare the between-sample diversity between the time points. The default comparison measure is the Bray-Curtis distance. 
+
+```{r}
+runacne_filtered %>%
+  betas() %>%
+  filter(week_1 == week_2) %>%
+  ggplot(aes(x = week_1, y = beta)) +
+  geom_jitter(width = 0.3, height = 0)
+```
+
+Do we see the same on the genus level? 
+
+```{r}
+runacne_filtered %>%
+  aggregate_taxa(rank = "genus") %>%
+  betas() %>%
+  filter(week_1 == week_2) %>%
+  ggplot(aes(x = week_1, y = beta)) +
+  geom_jitter(width = 0.3, height = 0)
+```
+
+## Differential presence/abundance analysis
+
+Are some genera more present at week 4 than at week 0 for verum group?
+```{r}
+runacne_filtered %>%
+  filter_samples(week != "2, 8, 12", treatment == "verum") %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_taxon_name_color() %>%
+  add_occurrences(condition = "week", relative = T) %>%
+  taxa() %>%
+  ggplot(aes(x = occurrence_in_0, y = occurrence_in_4, col = taxon_name_color)) +
+  geom_point() +
+  #geom_text(aes(label = genus)) +
+  scale_color_brewer(palette = "Paired")
+ggsave(
+  "../results/differentialoccurence_genera_verum.png", width = 25, height = 15, units = "cm"
+)
+
+runacne_filtered %>%
+  filter_samples(week != "2, 8, 12", treatment == "placebo") %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_taxon_name_color() %>%
+  add_occurrences(condition = "week", relative = T) %>%
+  taxa() %>%
+  ggplot(aes(x = occurrence_in_0, y = occurrence_in_4, col = taxon_name_color)) +
+  geom_point() +
+  #geom_text(aes(label = genus)) +
+  scale_color_brewer(palette = "Paired")
+ggsave(
+  "../results/differentialoccurence_genera_placebo.png", width = 25, height = 15, units = "cm"
+)
+  
+```
+
+Are some genera more abundant at week 4 than at week 0 for verum group? 
+
+```{r}
+runacne_filtered %>%
+  filter_samples(week != "2, 8, 12", treatment == "verum") %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_taxon_name_color() %>%
+  add_mean_rel_abundances(condition = "week") %>%
+  taxa() %>%
+  ggplot(aes(x = mean_rel_abundance_in_0, y = mean_rel_abundance_in_4)) +
+  geom_point() +
+  geom_text(aes(label = genus))
+ggsave(
+  "../results/Differentialrelabundance_genus_0vs4_verum.png", width = 25, height = 15, units = "cm"
+)
+```
+
+Are some genera more abundant at week 4 than at week 0 for placebo group? 
+
+```{r}
+runacne_filtered %>%
+  filter_samples(week != "2, 8, 12", treatment == "placebo") %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_taxon_name_color() %>%
+  add_mean_rel_abundances(condition = "week") %>%
+  taxa() %>%
+  ggplot(aes(x = mean_rel_abundance_in_0, y = mean_rel_abundance_in_4)) +
+  geom_point() +
+  geom_text(aes(label = genus))
+ggsave(
+  "../results/Differentialrelabundance_genus_0vs4_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+## Exploration of a single taxon 
+
+```{r}
+acne_genus <-
+  runacne_filtered %>%
+  aggregate_taxa(rank = "genus")
+acne_genus %>%
+  add_rel_abundance() %>%
+  filter_taxa(order == "Lactobacillales") %>%
+  bar_plot(x = sample) +
+  facet_wrap(~treatment) +
+  geom_rug(aes(col = week), sides = "b")
+ggsave(
+  "../results/relabundance_order_Lactobacillales.png", width = 35, height = 15, units = "cm"
+)
+
+verumdata %>%
+  filter_taxa(order == "Lactobacillales") %>%
+  bar_plot() +
+  facet_wrap(~week, scale = "free_x") 
+ggsave(  "../results/barplots_orderLactobacillales_verum.png", width = 35, height = 15, units = "cm"
+)
+
+placebodata %>%
+  filter_taxa(order == "Lactobacillales") %>%
+  bar_plot() +
+  facet_wrap(~week, scale = "free_x") 
+ggsave(
+  "../results/barplots_orderLactobacillales_placebo.png", width = 35, height = 15, units = "cm"
+)
+
+
+```
+
+```{r}
+verumdata %>%
+  add_rel_abundance() %>%
+  filter_taxa(order == "Bacillales") %>%
+  bar_plot() +
+  facet_wrap(~week, scale = "free_x") +
+  #geom_rug(aes(col = week), sides = "b")
+ggsave(
+  "../results/barplots_relabundance_order_Bacillales_verum.png", width = 25, height = 15, units = "cm"
+)
+
+placebodata %>%
+  add_rel_abundance() %>%
+  filter_taxa(order == "Bacillales") %>%
+  bar_plot() +
+  facet_wrap(~week, scale = "free_x") +
+  #geom_rug(aes(col = week), sides = "b")
+ggsave(
+  "../results/barplots_relabundance_order_Bacillales_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+Boxplot of relative abundances Lactobacillus genus for both groups:
+
+```{r}
+
+my_comparisons_2 <- list(c("0","2"), c("0","4"))
+
+verumdata %>%
+  aggregate_taxa(rank = "order") %>%
+  add_rel_abundance() %>%
+  filter_taxa(order == "Lactobacillales")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.5,binwidth = 0.1)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  stat_compare_means(comparisons = my_comparisons_2)+
+  labs(x="Visit", y="relative abundance", title= "Lactobacillales verum group")+
+  theme_pubclean()+
+  theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title =     element_text(size=16) )+ 
+  scale_y_log10()
+  #ggplot(aes(x=week,y=rel_abundance,fill=treatment)) +
+  #geom_boxplot()
+ggsave(
+  "../results/dotplot_relabundance_Lactobacillus_verum.png", width = 25, height = 15, units = "cm"
+)
+
+placebodata %>%
+  aggregate_taxa(rank = "order") %>%
+  add_rel_abundance() %>%
+  filter_taxa(order == "Lactobacillales")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.5,binwidth = 0.1)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  labs(x="Visit", y="relative abundance", title= "Lactobacillales placebo group")+
+  theme_pubclean()+
+  theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title =     element_text(size=16) )+ 
+  scale_y_log10()
+  #ggplot(aes(x=week,y=rel_abundance,fill=treatment)) +
+  #geom_boxplot()
+ggsave(
+  "../results/dotplot_relabundance_Lactobacillus_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+Boxplot of relative abundances of Staphylococcus genus for both groups:
+
+```{r}
+my_comparisons_3 <- list(c("0","2"))
+verumdata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Staphylococcus")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.5,binwidth = 0.1)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  stat_compare_means(comparisons = my_comparisons_3)+
+  labs(x="Visit", y="relative abundance", title= "Staphylococcus verum group")+
+  theme_pubclean() +
+  theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title =     element_text(size=16) )+ 
+  scale_y_log10()
+  
+      theme( legend.position="bottom", axis.title.x = element_text(size=16), axis.text.x= element_blank(), axis.title.y = element_text(size=16),strip.text = element_text(size=16),plot.title = element_text(size=16))
+  
+ggsave(
+  "../results/boxplot_relabundance_Staphylococcus_verum.png", width = 25, height = 15, units = "cm"
+)
+
+placebodata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Staphylococcus")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.5,binwidth = 0.05)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  stat_compare_means(comparisons = my_comparisons_3)+
+  labs(x="Visit", y="relative abundance", title= "Staphylococcus placebo group")+
+  theme_pubclean()+
+  theme(axis.title.x = element_text(size = 16), axis.text.x= element_text(size = 16), axis.title.y = element_text(size = 16),   plot.title = element_text(size=16) )+ 
+  scale_y_log10()
+ggsave(
+  "../results/boxplot_relabundance_Staphylococcus_placebo.png", width = 25, height = 15, units = "cm"
+)
+
+verumdata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Staphylococcus")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance,))+
+  geom_bar(stat="identity")+
+  stat_compare_means(comparisons = my_comparisons_2, label.y = c(9.5, 10.2, 10.7, 11.4))+
+  labs(x="week",y="Relative abundance Staphylococcus")+
+  theme_pubclean()
+  ggsave(
+  "../results/barplot_relabundance_Staphylococcus_verum.png", width = 25, height = 15, units = "cm"
+)
+  
+  placebodata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Staphylococcus")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance,))+
+  geom_bar(stat="identity")+
+    stat_compare_means(comparisons = my_comparisons_2, label.y = c(9.5, 10.2, 10.7, 11.4))+
+  labs(x="week",y="Relative abundance Staphylococcus")+
+  theme_pubclean()
+  ggsave(
+  "../results/barplot_relabundance_Staphylococcus_placebo.png", width = 25, height = 15, units = "cm"
+)
+  
+  
+
+```
+
+
+```{r}
+my_comparisons_4 <- list(c("0","2"), c("0","4"), c("0","8"), c("0","12"), c("2","4"))
+
+verumdata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Propionibacterium")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7,binwidth = 0.1)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  stat_compare_means(comparisons = my_comparisons_4)+
+  labs(x="Visit", y="relative abundance", title= "Cutibacterium verum group")+
+  theme_pubclean()+scale_y_log10()
+ggsave(
+  "../results/boxplot_relabundance_Cutibacterium_verum.png", width = 25, height = 15, units = "cm"
+)
+
+placebodata %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Propionibacterium")%>%
+  get_abundances_extended()%>%
+  ggplot(aes(x=as.factor(week),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7,binwidth = 0.1)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.6)+
+  stat_compare_means(comparisons = my_comparisons_4)+
+  labs(x="Visit", y="relative abundance", title= "Cutibacterium placebo group")+
+  theme_pubclean()+scale_y_log10()
+ggsave(
+  "../results/boxplot_relabundance_Cutibacterium_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+## barplots at ASV level for each participant
+
+```{r}
+verumdata %>%
+    mutate_samples(ID_participant=factor(ID_participant, levels=c("4","3","5","7","10","13","15","17","19","22","24","26","28","31","33","36","41","45","47","49","51","56","58","62","64","66","69","72","75","78","81","83","85","88","91","94","96","98","100" ))) %>%
+  bar_plot(x = week) +
+  facet_wrap(~ID_participant, scale = "free_x")
+ggsave(
+  "../results/barplots_participants_verum.png", width = 25, height = 15, units = "cm"
+)
+
+placebodata %>%
+    mutate_samples(ID_participant=factor(ID_participant, levels=c("1","6","9","11","14","16","20","23","25","27","29","34","40","43","46","50","53","55","57","61","63","65","68","71","73","76","80","82","84","86","90","93","95","97","99" ))) %>%
+  bar_plot(x = week) +
+  facet_wrap(~ID_participant, scale = "free_x")
+ggsave(
+  "../results/barplots_participants_placebo.png", width = 25, height = 15, units = "cm"
+)
+```
+
+## Correlation between inflammatory lesions and relative abudance lactobacilli
+
+```{r}
+verumdata_ILC <- 
+  verumdata %>%
+  filter_samples(ILC_0 != "NA")
+
+verumdata_ILC %>%
+  aggregate_taxa(rank = "genus") %>%
+  add_rel_abundance() %>%
+  filter_taxa(genus == "Propionibacterium")%>%
+  get_abundances_extended()%>%
+  ggscatter(df, x = ILC_0, y = rel_abundance,add = "reg.line", add.params = list(color= "blue", fill = "lightgray"), conf.int = TRUE, cor.coef = TRUE, cor.coeff.args = list(method = "pearson", label.x = 3, label.sep = "\n"))
+
+ # stat_cor(method = "pearson", label.x = 3, label.y = 30)  # Add correlation coefficient
+```
+
