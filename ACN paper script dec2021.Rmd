@@ -1,0 +1,657 @@
+---
+title: "ACN paper script pilot study"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Old data
+
+load libraries, set working directory, load ta object of pilot study
+```{r}
+print(date())
+#library(phyloseq)
+library(vegan)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+devtools::install_github("SWittouck/tidyamplicons", ref = "v0.2.1")
+library(tidyamplicons)
+setwd("C:/Users/EOerlemans/Desktop/Acne paper")
+
+
+load("Data/run_tidy _olddata.Robject")
+my_comparisons=list(c(1,2),c(2,3),c(3,4), c(1,4))
+```
+
+## Setting up tidy amplicons object
+
+rename ta object, change column name 
+Also change to new taxonomy, (see other functions )
+
+```{r}
+run <- run %>% reclassify_family("Lactobacillaceae", fin_refdb, sequence_var = "taxon")
+
+v1v2r4 <-run
+names(v1v2r4$samples)[names(v1v2r4$samples) == "repeat"] <- "rep"
+
+v1v2r4$samples<-unite(v1v2r4$samples,Samplename,type,condition,participant,rep,sep="-")
+
+```
+
+```{r}
+report_numbers(v1v2r4)
+```
+
+
+
+Add metadata but first remove 'old' metadata:
+
+```{r}
+
+v1v2r4$samples <- select(v1v2r4$samples,sample, Samplename)
+report_numbers(v1v2r4)
+tabel = read_delim("Data/metadataV1V2run4.csv", delim =";")
+v1v2r4$samples <- left_join(v1v2r4$samples,tabel)
+v1v2r4<-update_tidyamplicons(v1v2r4)
+```
+
+Add library sizes etc.
+```{r}
+v1v2r4<- add_lib_size(v1v2r4)
+#NA's for samples with 0 reads
+v1v2r4<-add_rel_abundance(v1v2r4)
+v1v2r4<-add_taxon_name(v1v2r4)
+# most abundant gets nr 1
+v1v2r4<-add_pcoa(v1v2r4)
+```
+
+First look at sample composition. NA's are controls
+```{r}
+get_bar_plot(v1v2r4,x=sample_id)+facet_wrap(~subgroup,scales = "free_x")
+```
+#Working on genus level:
+
+```{r}
+v1v2r4g<-v1v2r4
+v1v2r4g$taxa<-select(v1v2r4$taxa, kingdom,phylum, class, order, family, genus, taxon_id)
+v1v2r4g<-merge_taxa(v1v2r4g)
+```
+
+
+#  Skin analysis:
+Make new object with just skin samples and check if tech repeats differ:
+```{r}
+skn<-v1v2r4g
+skn$samples<- filter(skn$samples, str_detect(group,"ACN"))
+skn<- process_sample_selection(skn)
+report_numbers(skn)
+get_bar_plot(skn, x=sample_id)+facet_wrap(~subgroup, scales="free_x")
+
+study<-v1v2r4
+study$samples<- filter(study$samples, str_detect(study,"Y"))
+study<- process_sample_selection(study)
+report_numbers(study)
+get_bar_plot(study)+facet_wrap(~participant, scales="free_x")
+
+studyg<-v1v2r4g
+studyg$samples<- filter(studyg$samples, str_detect(study,"Y"))
+studyg<- process_sample_selection(studyg)
+report_numbers(studyg)
+get_bar_plot(studyg)+facet_wrap(~participant, scales="free_x")
+
+baseline<-v1v2r4
+baseline$samples<-filter(baseline$samples, str_detect(visit,"1"))
+baseline<-process_sample_selection(baseline)
+get_bar_plot(baseline)+facet_wrap(~subgroup, scales="free_x")
+
+baselineg<-skn
+baselineg$samples<-filter(baselineg$samples, str_detect(visit,"1"))
+baselineg<-process_sample_selection(baselineg)
+get_bar_plot(baselineg)+facet_wrap(~subgroup, scales="free_x")
+
+report_numbers(baseline)
+```
+Generally looks ok! --> Merge samples
+
+```{r}
+v1v2r4m<-v1v2r4
+v1v2r4m$sample<-select(v1v2r4m$samples, sample_id,study,group,subgroup,number,participant,visit,staal, score,pandp,comedones)
+v1v2r4m<-merge_samples(v1v2r4m)
+report_numbers(v1v2r4m)
+
+v1v2r4mg<-v1v2r4g
+v1v2r4mg$sample<-select(v1v2r4mg$samples, sample_id,study,group,subgroup,number,participant,visit,staal, score,pandp,comedones)
+v1v2r4mg<-merge_samples(v1v2r4mg)
+report_numbers(v1v2r4mg)
+
+```
+
+Make objects m= merged, g= genus level 
+skn is all samples
+study is subsetting for the pilot study
+baseline is only samples of the first visit and the controls (no intervention- healty participants)
+Con - only control participants (healthy)
+```{r}
+sknmg<-skn
+sknmg$samples<-select(sknmg$samples, sample_id,acne, study,group,subgroup,participant,visit,staal, score,pandp,comedones,-techrep)
+sknmg<-merge_samples(sknmg)
+report_numbers(sknmg)
+sknmg<- add_lib_size(sknmg)
+sknmg<-add_rel_abundance(sknmg)
+sknmg<-add_pcoa(sknmg)
+
+studym<-study
+studym$samples<-select(studym$samples, sample_id,acne, study,group,subgroup,participant,visit,staal, score,pandp,comedones)
+studym<-merge_samples(studym)
+report_numbers(studym)
+studym<-add_lib_size(studym)
+studym<-add_rel_abundance(studym)
+studym<-add_pcoa(studym)
+
+studymg<-studyg
+studymg$samples<-select(studymg$samples, sample_id, acne, study,group,subgroup,participant,visit,staal, score,pandp,comedones)
+studymg<-merge_samples(studymg)
+report_numbers(studymg)
+studymg<-add_lib_size(studymg)
+studymg<-add_rel_abundance(studymg)
+studymg<-add_pcoa(studymg)
+
+baselinemg<-baselineg
+baselinemg$samples<-select(baselinemg$samples,acne, sample_id,study,group,subgroup,participant,visit,staal, score,pandp,comedones)
+baselinemg<-merge_samples(baselinemg)
+report_numbers(baselinemg)
+baselinemg<-add_lib_size(baselinemg)
+baselinemg<-add_diversity_measures(baselinemg)
+get_bar_plot(baselinemg)+facet_wrap(~subgroup, scales="free_x")
+
+baselinem<-baseline
+baselinem$samples<-select(baselinem$samples,acne, sample_id,study,group,subgroup,participant,visit,staal, score,pandp,comedones)
+baselinem<-merge_samples(baselinem)
+report_numbers(baselinem)
+baselinem<-add_lib_size(baselinem)
+baselinem<-add_rel_abundance(baselinem)
+baselinem<-add_diversity_measures(baselinem)
+
+baselineCon<-baselinemg
+baselineCon$samples<-filter(baselineCon$samples,str_detect(subgroup,"CON"))
+baselineCon<-process_sample_selection(baselineCon)
+
+baselineCon2<-baselinem
+baselineCon2$samples<-filter(baselineCon2$samples,str_detect(subgroup,"CON"))
+baselineCon2<-process_sample_selection(baselineCon2)
+
+```
+
+
+
+Genera separate:
+make objects
+```{r}
+studyLacto<-studym
+studyLacto$taxa<-filter(studyLacto$taxa,str_detect(genus,"Lactobacillus"))
+studyLacto<-process_taxon_selection(studyLacto)
+
+studynoLacto<-studym
+studynoLacto$taxa<-filter(studynoLacto$taxa,!str_detect(genus,"Lactobacillus"))
+studynoLacto<-process_taxon_selection(studynoLacto)
+studynoLacto<-add_rel_abundance(studynoLacto)
+
+studyStaphnoLacto<-studynoLacto
+studyStaphnoLacto$taxa<-filter(studyStaphnoLacto$taxa,str_detect(genus,"Staphylococcus"))
+studyStaphnoLacto<-process_taxon_selection(studyStaphnoLacto)
+
+studynoLactog<-studymg
+studynoLactog$taxa<-filter(studynoLactog$taxa,!str_detect(genus,"Lactobacillus"))
+studynoLactog<-process_taxon_selection(studynoLactog)
+
+baselineLacto<-baselinem
+baselineLacto$taxa<-filter(baselineLacto$taxa,str_detect(genus,"Lactobacillus"))
+baselineLacto<-process_taxon_selection(baselineLacto)
+
+
+
+studyStaph<-studym
+studyStaph$taxa<-filter(studyStaph$taxa,str_detect(genus,"Staphylococcus"))
+studyStaph<-process_taxon_selection(studyStaph)
+
+baselineStaph<-baselinem
+baselineStaph$taxa<-filter(baselineStaph$taxa,str_detect(genus,"Staphylococcus"))
+baselineStaph<-process_taxon_selection(baselineStaph)
+
+studyCuti<-studym
+studyCuti$taxa<-filter(studyCuti$taxa,str_detect(genus,"Propionibacterium"))
+studyCuti<-process_taxon_selection(studyCuti)
+studyCuti<-add_taxon_name(studyCuti)
+
+studyCutinoLacto<-studynoLacto
+studyCutinoLacto$taxa<-filter(studyCutinoLacto$taxa,str_detect(genus,"Propionibacterium"))
+studyCutinoLacto<-process_taxon_selection(studyCutinoLacto)
+
+baselineCuti<-baselinem
+baselineCuti$taxa<-filter(baselineCuti$taxa,str_detect(genus,"Propionibacterium"))
+baselineCuti<-process_taxon_selection(baselineCuti)
+
+```
+
+add gender classifier 
+```{r}
+baselineCon$samples<-mutate(baselineCon$samples,gender=participant)
+baselineCon$samples$gender<-c("F","F","F","F","F","F","F","F","F","F","F","F","F","F","F","M","M","M","M","M","M","M","M","M","M","M","M","M","M")
+baselineCon2$samples<-mutate(baselineCon2$samples,gender=participant)
+baselineCon2$samples$gender<-c("F","F","F","F","F","F","F","F","F","F","F","F","F","F","F","M","M","M","M","M","M","M","M","M","M","M","M","M","M")
+baselineCon<-add_presence_counts(baselineCon,gender)
+
+baselineConLacto<-baselineCon2
+baselineConLacto$taxa<-filter(baselineConLacto$taxa,str_detect(genus,"Lactobacillus"))
+baselineConLacto<-process_taxon_selection(baselineConLacto)
+
+write.csv2(get_abundances_extended(baselineCon),"baselineCon_genuslevel.csv")
+write.csv2(get_abundances_extended(baselineCon2),"baselineCon_ASVlevel.csv")
+write.csv2(get_abundances_extended(studymg),"studymg.csv")
+```
+
+check the taxonomy through barplots for lactobacilli 
+```{r}
+get_bar_plot(studyLacto,x=visit)+
+  facet_wrap(~participant)+
+  labs(title="Lactobacillus ASVs",x="Visit",y="Relative abundance")+
+  theme_minimal()+theme(legend.position = "right")
+ggsave("StudyLacto_ASVcolor.png")
+
+get_bar_plot(baselineLacto,x=as.factor(participant))+
+  facet_wrap(~acne,scales = "free_x")+
+  labs(title="Lactobacillus ASVs",x="Acne sample",y="Relative abundance")+
+  theme_minimal()+theme(legend.position = "bottom",axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14))
+ggsave("baselineLacto.png")
+```
+
+Do the same for only the controls, for staphylococci and cutibacteria (also Propionibacterium)
+```{r}
+get_bar_plot(baselineConLacto,x=as.factor(participant))+
+  facet_wrap(~gender,scales = "free_x")+
+  labs(title="Lactobacillus ASVs",x="Gender",y="Relative abundance")+
+  theme_minimal()+theme(legend.position = "bottom",axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14))
+ggsave("baselineLactoCon.png")
+
+get_bar_plot(studyStaph,x=visit)+
+  facet_wrap(~participant)+
+  labs(title="Staphylococcus ASVs",x="Visit",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "right")
+ggsave("studyStaph.png")
+
+get_bar_plot(studyStaphnoLacto,x=visit)+
+  facet_wrap(~participant)+
+  labs(title="Staphylococcus ASVs (filtered)",x="Visit",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "right")
+ggsave("studyStaph_LactoFiltered.png")
+
+get_bar_plot(baselineStaph,x=as.factor(participant))+
+  facet_wrap(~acne,scales = "free_x")+
+  labs(title="Staphylococcus ASVs",x="Acne sample",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "bottom",axis.text.x= element_text(size = 8,colour="black",angle=90))
+ggsave("baselineStaph.png")
+
+get_bar_plot(studyCuti,x=visit)+
+  labs(title="Propionibacterium and Cutibacterium ASVs",x="Visit",y="Relative abundance")+
+  facet_wrap(~participant)+theme_pubclean()+theme(legend.position = "right")
+ggsave("studyCuti.png")
+
+get_bar_plot(studyCutinoLacto,x=visit)+
+  labs(title="Propionibacterium and Cutibacterium ASVs (filtered)",x="Visit",y="Relative abundance")+
+  facet_wrap(~participant)+theme_pubclean()+theme(legend.position = "right")
+ggsave("studyCuti_LactoFiltered.png")
+
+get_bar_plot(baselineCuti,x=as.factor(participant))+
+  facet_wrap(~acne,scales = "free_x")+
+  labs(title="Cutibacterium ASVs",x="Acne sample",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "bottom",axis.text.x= element_text(size = 8,colour="black",angle=90))
+ggsave("baselineCuti.png")
+```
+
+Merge the ASVs that are derivate of the same applied lactobacillus
+```{r}
+studyLacto<-add_taxon_name_color(studyLacto)
+studyLacto$taxa<-mutate(studyLacto$taxa,taxon_name_color2=taxon_name_color)
+studyLacto$taxa$taxon_name_color2<-replace(studyLacto$taxa$taxon_name_color2,studyLacto$taxa$taxon_name_color2=="Lactobacillus 2","Lactobacillus 2")
+studyLacto$taxa$taxon_name_color2<-replace(studyLacto$taxa$taxon_name_color2,studyLacto$taxa$taxon_name_color2=="Lactobacillus 4","Lactobacillus 2")
+studyLacto$taxa$taxon_name_color2<-replace(studyLacto$taxa$taxon_name_color2,studyLacto$taxa$taxon_name_color2=="Lactobacillus 3","Lactobacillus 3")
+studyLacto$taxa$taxon_name_color2<-replace(studyLacto$taxa$taxon_name_color2,studyLacto$taxa$taxon_name_color2=="Lactobacillus 5","Lactobacillus 3")
+```
+
+
+Make barplots for figure 4 
+
+```{r, fig.height=3,fig.width=10}
+get_bar_plot(studyLacto,geom_bar = F)+
+  geom_bar(stat = "identity", aes(x= visit,fill=taxon_name_color2))+
+  facet_wrap(~participant)+
+  labs(title="Lactobacillus ASVs",x="Visit",y="Relative abundance")+
+  theme_minimal()+theme(legend.position = "right")
+ggsave("studyLacto_SpeciesColoured.png")
+
+Lacbar<-get_bar_plot(studyLacto,geom_bar = F)+
+  geom_bar(stat = "identity", aes(x= visit,fill=taxon_name_color2))+
+  facet_wrap(~participant,nrow=1)+
+  labs(title="Lactobacillus ASVs",x="Visit",y="Relative abundance")+
+  theme_minimal()+theme(legend.position = "right")+theme(axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14), legend.text = element_text(size=11))+
+  scale_y_reverse()
+ggsave("studyLacto_speciesColoured_bottomLedgend.svg")
+Lacbar
+```
+
+```{r}
+get_bar_plot(baselineCon,x=as.factor(participant))+
+  facet_wrap(~gender,scales = "free_x")+
+  labs(title="Lactobacillus ASVs",x="Gender",y="Relative abundance")+
+  theme_pubclean()+theme(legend.position = "bottom",axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14))
+ggsave("baselineLactoCon.png")
+```
+
+
+
+Try to visualise relative abundances over visits of different samples (1 dot) for lactobacilli, staphylococci and propionibacterium/cutibacterium
+
+```{r}
+studymg$samples$visit<-as.factor(studymg$samples$visit)
+studymg$samples$participant<-as.factor(studymg$samples$participant)
+studymg<-add_presence_counts(studymg,visit)
+
+relabunLac<-get_abundances_extended(studymg)
+relabunLac<-filter(relabunLac,str_detect(genus,"Lactobacillus"))
+
+baselinemg<-add_rel_abundance(baselinemg)
+baselinemg<-add_presence_counts(baselinemg,acne)
+relabunLacBL<-get_abundances_extended(baselinemg)
+relabunLacBL<-filter(relabunLacBL,str_detect(genus, "Lactobacillus"))
+
+baselineCon<-add_rel_abundance(baselineCon)
+relabunLacCon<-get_abundances_extended(baselineCon)
+relabunLacCon<-filter(relabunLacCon,str_detect(genus, "Lactobacillus"))
+
+relabunStaph<-get_abundances_extended(studymg)
+relabunStaph<-filter(relabunStaph,str_detect(genus,"Staphylococcus"))
+
+relabunStaphBL<-get_abundances_extended(baselinemg)
+relabunStaphBL<-filter(relabunStaphBL,str_detect(genus, "Staphylococcus"))
+
+relabunCuti<-get_abundances_extended(studymg)
+relabunCuti<-filter(relabunCuti,str_detect(genus,"Propionibacterium|Cutibacterium"))
+
+
+relabunCutiBL<-get_abundances_extended(baselinemg)
+relabunCutiBL<-filter(relabunCutiBL,str_detect(genus, "Propionibacterium"))
+
+```
+
+# Evolution of relative abundances
+Figures with relative abundances of important genera (e.g. Figure4B)
+```{r}
+
+ggplot(relabunLac,aes(x=as.factor(visit),y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.7)+
+  stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Visit", y="relative abundance", title= "Lactobacillus")+
+  theme_pubclean()+scale_y_log10()
+ggsave("RelativeAbundancesLactobacilli_study.png")
+
+BarStaphstudy<-ggplot(relabunStaph,aes(x=visit,y=rel_abundance))+
+  geom_boxplot(alpha=0.5,fill='lightgrey',outlier.size = 0)+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=1,alpha=0.7,aes(col= subgroup, fill=subgroup))+
+  scale_color_manual(values=c("#00798c"))+
+  scale_fill_manual(values=c("#00798c"))+
+  labs(x="Visit", y="relative abundance", title= "Staphylococcus-study")+
+  theme_pubclean()+scale_y_log10()
+ggsave("RelativeAbundancesStaphylococci_study.png")
+
+BarCutistudy<-ggplot(relabunCuti,aes(x=visit,y=rel_abundance))+
+  geom_boxplot(alpha=0.5,fill='lightgrey',outlier.size = 0)+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=1,alpha=0.7,aes(col= subgroup, fill=subgroup))+
+  scale_color_manual(values=c("#00798c"))+
+  scale_fill_manual(values=c("#00798c"))+
+  labs(x="Visit", y="relative abundance", title= "Cutibacterium-study")+
+  theme_pubclean()+scale_y_log10()+theme(legend.position = "bottom")
+ggsave("RelativeAbundancesCutibacterium_study.png")
+
+ggplot(relabunLacBL,aes(x=acne,y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.7)+
+  stat_compare_means(label.x.npc="middle",label.y.npc="top")+
+  labs(x="group", y="relative abundance", title= "Lactobacillus")+
+  theme_pubclean()+scale_y_log10(breaks = c(0.0001,0.001,0.01,0.1,1))
+ggsave("RelativeAbundancesLactobacilli_baseline.png")
+
+ggplot(relabunLacCon,aes(x=gender,y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.7)+
+  scale_color_manual(values=c("#66a182","#2e4057","#00798c"))+
+  scale_fill_manual(values=c("#66a182","#2e4057","#00798c"))+
+  stat_compare_means(label.x.npc="middle",label.y.npc="top")+
+  labs(x="group", y="relative abundance", title= "Lactobacillus Controles")+
+  theme_pubclean()+scale_y_log10(breaks = c(0.0001,0.001,0.01,0.1,1))
+ggsave("RelativeAbundancesLactobacilli_baselineControles.png")
+
+barstaphbl<-ggplot(relabunStaphBL,aes(x=acne,y=rel_abundance))+
+  geom_boxplot(alpha=0.5,fill='lightgrey',outlier.size = 0)+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=1,alpha=0.7,aes(col= subgroup, fill=subgroup))+
+  scale_color_manual(values=c("#66a182","#2e4057","#00798c"))+
+  scale_fill_manual(values=c("#66a182","#2e4057","#00798c"))+
+  labs(x="group", y="relative abundance", title= "Staphylococcus-baseline")+
+  theme_pubclean()+scale_y_log10(breaks = c(0.0001,0.001,0.01,0.1,1))+expand_limits(y=2)+theme(legend.position = "bottom")
+ggsave("RelativeAbundancesStaphylococci_baseline.png")
+
+barCutibl<-ggplot(relabunCutiBL,aes(x=acne,y=rel_abundance))+
+  geom_boxplot(alpha=0.5,fill='lightgrey',outlier.size = 0)+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=1,alpha=0.7,aes(col= subgroup, fill=subgroup))+
+  scale_color_manual(values=c("#66a182","#2e4057","#00798c"))+
+  scale_fill_manual(values=c("#66a182","#2e4057","#00798c"))+
+  labs(x="group", y="relative abundance", title= "Cutibacterium-baseline")+
+  theme_pubclean()+scale_y_log10()+theme(legend.position = "bottom")
+ggsave("RelativeAbundancesCutibacterium_baseline.png")
+```
+```{r,fig.width=10}
+ggarrange(barstaphbl,BarStaphstudy,barCutibl,BarCutistudy,ncol=4,common.legend = T)
+ggsave("barRelAbund.svg")
+```
+
+
+```{r}
+
+write.csv2(get_abundances_extended(studym),"studym.csv")
+write.csv2(get_abundances_extended(baselinem),"baselinem.csv")
+write.csv2(get_abundances_extended(studyLacto),"studyLacto.csv")
+write.csv2(baselineLacto$taxa,"baselineLacto.csv")
+write.csv2(relabunLacCon,"relabunLacCon.csv")
+write.csv2(relabunStaph,"relabunStaph.csv")
+write.csv2(relabunCuti,"relabunCuti.csv")
+write.csv2(relabunLac,"relabunLac.csv")
+```
+#Study
+
+```{r}
+get_bar_plot(studymg, geom_bar =F)+
+  geom_bar(stat="identity", position="fill", aes(x=visit))+
+  labs(x="Visit",title="Taxonomic composition per sample")+
+  facet_wrap(~participant)+theme_minimal()
+ggsave("TaxonomyStudy.png")
+
+get_bar_plot(studymg, geom_bar =F)+
+  geom_bar(stat="identity", position="fill", aes(x=visit))+
+  labs(x="Visit",title="Taxonomic composition per sample")+
+  facet_wrap(~participant)+theme_minimal()+theme(legend.position = "bottom",axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14), legend.text = element_text(size=11))
+ggsave("TaxonomyStudy_2.png")
+
+get_bar_plot(studynoLactog, geom_bar =F)+
+  geom_bar(stat="identity", position="fill", aes(x=visit))+
+  labs(x="Visit",title="Taxonomic composition per sample")+
+  facet_wrap(~participant,nrow=1)+theme_minimal()
+ggsave("TaxonomyStudy_LactoFiltered.png")
+
+
+
+```
+
+```{r,fig.width=10}
+get_bar_plot(studymg, geom_bar =F)+
+  geom_bar(stat="identity", position="fill", aes(x=visit))+
+  labs(x="Visit",title="Taxonomic composition per sample")+
+  facet_wrap(~participant,nrow=1)+theme_minimal()+theme(legend.position = "right",axis.text.x= element_text(size = 10, angle=90),axis.text.y= element_text(size = 12), axis.title=element_text(size=14), legend.text = element_text(size=11))
+ggsave("BarGenusTax.svg")
+```
+
+
+#Alpha diversity
+
+```{r}
+baselinemg<-add_diversity_measures(baselinemg)
+studymg<-add_diversity_measures(studymg)
+
+ggplot(studymg$samples,aes(x=visit, y=div_observed))+
+  geom_jitter(width = 0.1, height = 0, size = 2, alpha = 0.7)+ 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.. ),
+                 width = .76, linetype = "dashed")+
+  labs(x="Visit", y="Alpha diversity measure", title="Observed diversity") +
+  stat_compare_means(comparisons = my_comparisons)+
+  theme_pubclean()
+
+ggplot(studymg$samples,aes(x=visit, y=div_inv_simpson))+
+  geom_jitter(width = 0.1, height = 0, size = 2, alpha = 0.7)+ 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.. ),
+                 width = .76, linetype = "dashed") +
+  stat_compare_means(comparisons = my_comparisons)+
+  labs(x="Visit", y="Alpha diversity measure", title="Inverse Simpson index")+
+  theme_pubclean()
+
+ggplot(baselinemg$samples,aes(x=acne, y=div_observed))+
+  geom_jitter(width = 0.1, height = 0, size = 2, alpha = 0.7, aes(col=subgroup))+ 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.. ),
+                 width = .76, linetype = "dashed") +
+  stat_compare_means()+
+  labs(x="Acne sample", y="Alpha diversity measure", title="Observed diversity")+
+  theme_pubclean()
+
+ggplot(baselinemg$samples,aes(x=acne, y=div_inv_simpson))+
+  geom_jitter(width = 0.1, height = 0, size = 2, alpha = 0.7, aes(col=subgroup))+ 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.. ),
+                 width = .76, linetype = "dashed") +
+  stat_compare_means()+
+  labs(x="Acne sample", y="Alpha diversity measure", title="Inverse Simpson index")+
+  theme_pubclean()
+
+```
+
+
+Make figures for the relative abundances
+```{r}
+ggplot(relabunStaph, aes(x=comedones,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title =" Staphylococcus", x = "comedones", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+
+ggplot(relabunStaph, aes(x=pandp,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title =" Staphylococcus", x = "inflammatory lesions", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+
+ggplot(relabunLac, aes(x=comedones,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title ="Lactobacillus", x = "comedones", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+
+ggplot(relabunLac, aes(x=pandp,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title =" Lactobacillus", x = "inflammatory lesions", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+
+ggplot(relabunCuti, aes(x=comedones,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title =" Cutibacteria", x = "comedones", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+
+ggplot(relabunCuti, aes(x=pandp,y=rel_abundance,colour=visit))+geom_point()+facet_wrap(~visit)+geom_smooth(method = "lm")+stat_cor(label.x.npc = "left",label.y = 0.7)+ labs(title =" Cutibacteria", x = "inflammatory lesions", y = "Relative abundance")+theme_pubclean()+expand_limits(y=-0.2)
+```
+
+
+
+```{r}
+ggplot(studymg$samples,aes(x=visit, y=pandp))+geom_point()+facet_wrap(~participant)+theme_pubclean()
+```
+
+Make PCOA plot for the study and the baseline samples
+```{r}
+studymg<-add_pcoa(studymg)
+ggplot(studymg$samples,aes(x=pcoa1,y=pcoa2,col=as.factor(visit)))+geom_point()+theme_minimal()+ labs(color='Visit') +theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),legend.title=element_text(size=14))
+
+baselinemg<-add_pcoa(baselinemg)
+ggplot(baselinemg$samples,aes(x=pcoa1,y=pcoa2, col= acne))+geom_point()+theme_minimal()+theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),legend.title=element_text(size=14))
+```
+
+check relative abundances at baseline for delbrueckii group
+
+```{r}
+
+baselineLactoDb<-baselineLacto
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 1$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 2$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 3$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 6$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 7$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 9$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 18$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 21$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 23$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 25$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 26$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 28$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 29$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 30$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 32$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 33$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 35$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 38$"))
+baselineLactoDb$taxa<-filter(baselineLactoDb$taxa, !str_detect(taxon_name, "Lactobacillus 39$"))
+baselineLactoDb<-process_taxon_selection(baselineLactoDb)
+
+
+baselineLactoDb<-add_rel_abundance(baselineLactoDb)
+relabundDb<-get_abundances_extended(baselineLactoDb)
+
+```
+
+```{r}
+ggplot(relabundDb,aes(x=acne,y=rel_abundance))+
+  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7)+
+  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.7)+
+  stat_compare_means()+
+  labs(x="group", y="relative abundance", title= "Delbrueckii")+
+  theme_pubclean()+scale_y_log10(breaks = c(0.0001,0.001,0.01,0.1,1))+expand_limits(y=2)
+
+```
+
+
+
+```{r}
+write.csv2(get_abundances_extended(baselinem),"baselinem.csv")
+```
+
+```{r}
+#ggplot(delbrueckii,aes(x = group,y=RelAbun))+
+#  geom_dotplot(binaxis = "y", stackdir = "center",dotsize=0.7)+
+#  stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), geom="crossbar", width=0.7)+
+#  stat_compare_means(label.y.npc= "bottom",label.x.npc= "middle")+
+#  labs(x="group", y="relative abundance", title= "Delbrueckii group")+
+#  theme_pubclean()+scale_y_log10()
+```
+
+Make altered figure for growth in figure 4
+```{r}
+growth_pac <- read.csv("~/Desktop/Miseq/analysis/V1V2run4/paper/growth_pac.csv", sep=";")
+growth_pac$growth.1<-factor(growth_pac$growth.1,levels =c("No","Weak","Strong"))
+```
+
+```{r,fig.width=12,fig.height=1}
+fig4dbottom<-ggplot(growth_pac,aes(x=visite,y=medium))+geom_tile(aes(fill=growth.1))+facet_wrap(vars(patient),nrow=1)+theme_minimal()+theme(text = element_text(size=18))+scale_fill_brewer(palette = "Blues")+theme(legend.position = "bottom")
+fig4dbottom
+```
+
+```{r,fig.width=12}
+
+ggarrange(fig4dtop,fig4dm,fig4dbottom,nrow=3)
+ggsave("fig4d.svg")
+```
+
+
+```
+
